@@ -1,0 +1,73 @@
+# Spectrum Hub for TrueNAS SCALE (24.10 or newer).
+# Apps → Discover Apps → ⋮ → Install via YAML, paste this file, then change everything marked CHANGE.
+#
+# Folders (create these datasets first, or point at existing ones):
+#   /mnt/POOL/apps/spectrum-hub/data     hub settings and request history
+#   /mnt/POOL/apps/spectrum-hub/models   .gguf language models
+#   /mnt/POOL/apps/slskd/config          slskd's own settings and database
+#   /mnt/POOL/apps/slskd/downloads       finished Soulseek downloads (the hub moves them out)
+#   /mnt/POOL/apps/slskd/incomplete      downloads in progress
+#   /mnt/POOL/media/music                your music: the same folder Jellyfin's music library uses
+#
+# The NVIDIA driver must be installed: Apps → Configuration → Settings → Install NVIDIA Drivers.
+
+services:
+  hub:
+    image: ghcr.io/CHANGE-github-user/spectrum-hub:latest   # CHANGE: your GitHub user name, lower case
+    container_name: spectrum-hub
+    restart: unless-stopped
+    ports:
+      - "8780:8780"            # web UI, phone WebSocket (/ws/phone) and MCP (/mcp)
+    environment:
+      TZ: "America/New_York"   # CHANGE
+      JELLYFIN_URL: "http://192.168.86.43:30013"   # CHANGE: your Jellyfin address
+      JELLYFIN_API_KEY: ""                         # CHANGE: Jellyfin Dashboard → API Keys
+      # Where /music/Soulseek is *inside the Jellyfin container*, e.g. /media/music/Soulseek.
+      # Lets the hub add single files instead of rescanning the library. Blank = rescan.
+      JELLYFIN_IMPORT_PATH: ""
+      SLSKD_URL: "http://slskd:5030"
+      SLSKD_API_KEY: "CHANGE-me-to-a-long-random-string-1234"   # same value as in slskd below
+      SLSKD_DOWNLOADS_DIR: "/downloads"
+      IMPORT_DIR: "/music/Soulseek"
+      UI_PASSWORD: ""          # CHANGE if this port is reachable through Cloudflare
+      # Everything below can also be changed later in the web UI (Settings / Models).
+      LLM_GPU_LAYERS: "99"
+      LLM_CTX: "4096"
+    volumes:
+      - /mnt/POOL/apps/spectrum-hub/data:/data          # CHANGE POOL
+      - /mnt/POOL/apps/spectrum-hub/models:/models      # CHANGE POOL
+      - /mnt/POOL/apps/slskd/downloads:/downloads       # CHANGE POOL
+      - /mnt/POOL/media/music:/music                    # CHANGE: your music library
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      - slskd
+
+  slskd:
+    image: slskd/slskd:0.26.2
+    container_name: slskd
+    restart: unless-stopped
+    ports:
+      - "5030:5030"            # slskd's own web UI (optional, handy for checking things)
+      - "50300:50300"          # Soulseek listening port: forward this on your router for better results
+    environment:
+      SLSKD_SLSK_USERNAME: "CHANGE-soulseek-user"      # pick any name; the account is created on first login
+      SLSKD_SLSK_PASSWORD: "CHANGE-soulseek-password"
+      SLSKD_SLSK_LISTEN_PORT: "50300"
+      SLSKD_USERNAME: "admin"                          # slskd web UI login
+      SLSKD_PASSWORD: "CHANGE-web-password"
+      SLSKD_API_KEY: "CHANGE-me-to-a-long-random-string-1234"   # 16+ characters, same as above
+      SLSKD_DOWNLOADS_DIR: "/downloads"
+      SLSKD_INCOMPLETE_DIR: "/incomplete"
+      SLSKD_SHARED_DIR: "/music"                       # sharing back is expected on Soulseek
+      SLSKD_REMOTE_CONFIGURATION: "true"
+    volumes:
+      - /mnt/POOL/apps/slskd/config:/app                # CHANGE POOL
+      - /mnt/POOL/apps/slskd/downloads:/downloads       # CHANGE POOL
+      - /mnt/POOL/apps/slskd/incomplete:/incomplete     # CHANGE POOL
+      - /mnt/POOL/media/music:/music:ro                 # CHANGE: shared read-only

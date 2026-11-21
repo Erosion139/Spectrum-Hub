@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spectrum Hub</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2319d3c5'/><path d='M7 22v-6M12 22V10M17 22v-9M22 22V7M27 22v-4' stroke='%23062a28' stroke-width='3' stroke-linecap='round'/></svg>">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo"></span>Spectrum Hub <span id="ver" class="muted"></span></div>
+  <nav id="tabs">
+    <button data-tab="dash" class="on">Dashboard</button>
+    <button data-tab="requests">Requests <span id="reqBadge" class="badge" hidden></span></button>
+    <button data-tab="soulseek">Soulseek</button>
+    <button data-tab="library">Downloaded</button>
+    <button data-tab="models">Models</button>
+    <button data-tab="log">Live log</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <div id="conn" class="conn" title="Connection to the hub">●</div>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <section id="tab-dash" class="tab on">
+    <div class="pills" id="pills"></div>
+
+    <form id="cmdForm" class="cmd">
+      <input id="cmdText" placeholder="Type a command as if you said it to the phone: “play dreams by fleetwood mac”" autocomplete="off">
+      <button class="primary">Send</button>
+    </form>
+
+    <div class="grid metrics">
+      <div class="card metric" id="m-cpu"><div class="k">CPU</div><div class="v">–</div><div class="s"></div><canvas></canvas></div>
+      <div class="card metric" id="m-ram"><div class="k">System RAM</div><div class="v">–</div><div class="s"></div><canvas></canvas></div>
+      <div class="card metric" id="m-gpu"><div class="k">GPU load</div><div class="v">–</div><div class="s"></div><canvas></canvas></div>
+      <div class="card metric" id="m-vram"><div class="k">VRAM</div><div class="v">–</div><div class="s"></div><canvas></canvas></div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h3>Language model</h3>
+        <dl class="kv" id="llmCard"></dl>
+      </div>
+      <div class="card">
+        <h3>Phone</h3>
+        <dl class="kv" id="phoneCard"></dl>
+        <div class="row gap">
+          <button class="small" data-pcmd="previous">⏮</button>
+          <button class="small" data-pcmd="pause">⏸</button>
+          <button class="small" data-pcmd="resume">▶</button>
+          <button class="small" data-pcmd="skip">⏭</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h3>Active requests</h3>
+        <div id="activeReqs" class="reqlist compact"></div>
+      </div>
+      <div class="card">
+        <h3>LLM live output</h3>
+        <div id="llmLive" class="llmlive"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REQUESTS -->
+  <section id="tab-requests" class="tab">
+    <div class="row between">
+      <h2>Requests</h2>
+      <div class="row gap"><label class="muted"><input type="checkbox" id="reqActiveOnly"> Only unfinished</label></div>
+    </div>
+    <div id="reqList" class="reqlist"></div>
+  </section>
+
+  <!-- SOULSEEK -->
+  <section id="tab-soulseek" class="tab">
+    <div class="row between"><h2>Soulseek activity</h2><span id="slskState" class="muted"></span></div>
+    <div class="grid two">
+      <div class="card"><h3>Searches</h3><table class="tbl" id="slskSearches"></table></div>
+      <div class="card"><h3>Transfers</h3><table class="tbl" id="slskDownloads"></table></div>
+    </div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section id="tab-library" class="tab">
+    <div class="row between"><h2>Downloaded songs</h2><span id="libInfo" class="muted"></span></div>
+    <input id="libFilter" class="filter" placeholder="Filter by title, artist or album">
+    <table class="tbl" id="libTable"></table>
+  </section>
+
+  <!-- MODELS -->
+  <section id="tab-models" class="tab">
+    <h2>Models</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>On the server <span id="diskFree" class="muted"></span></h3>
+        <table class="tbl" id="modelTable"></table>
+      </div>
+      <div class="card">
+        <h3>Launch settings</h3>
+        <form id="llmParams" class="form">
+          <label>GPU layers <input name="llm_gpu_layers" type="number" min="0" max="999"><small>99 = everything on the GPU. Lower it if the model doesn't fit in VRAM (the rest runs on the CPU).</small></label>
+          <label>Context length <input name="llm_ctx" type="number" min="512" step="512"><small>Commands are short: 2048–4096 is plenty and saves VRAM.</small></label>
+          <label>CPU threads <input name="llm_threads" type="number" min="0"><small>0 = automatic.</small></label>
+          <label>Extra llama-server arguments <input name="llm_extra_args" placeholder="--flash-attn on -ctk q8_0 -ctv q8_0"></label>
+          <label class="check"><input name="llm_autostart" type="checkbox"> Start the selected model when the hub starts</label>
+          <div class="row gap"><button type="button" id="llmStop">Stop model</button><span id="llmState" class="muted"></span></div>
+        </form>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="card">
+        <h3>Get a model from Hugging Face</h3>
+        <form id="hfForm" class="row gap">
+          <input id="hfRepo" placeholder="e.g. Qwen/Qwen2.5-3B-Instruct-GGUF" class="grow">
+          <button class="primary">List files</button>
+        </form>
+        <p class="muted small">For a 3 GB card, 1.5B–4B models at Q4_K_M are a good size (about 1–2.5 GB). Leave room for the context and other apps.</p>
+        <table class="tbl" id="hfFiles"></table>
+        <div id="dlProgress"></div>
+      </div>
+      <div class="card">
+        <h3>Upload a .gguf file</h3>
+        <input type="file" id="upFile" accept=".gguf">
+        <div class="row gap"><button id="upBtn" class="primary">Upload</button><span id="upInfo" class="muted"></span></div>
+        <div class="bar"><div id="upBar"></div></div>
+        <h3 class="mt">Try a phrase</h3>
+        <form id="testForm" class="row gap"><input id="testText" class="grow" placeholder="put on something by daft punk"><button>Parse</button></form>
+        <pre id="testOut" class="out"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section id="tab-log" class="tab">
+    <div class="row between">
+      <h2>Live log</h2>
+      <div class="row gap" id="logFilters">
+        <label><input type="checkbox" value="phone" checked> Phone</label>
+        <label><input type="checkbox" value="llm" checked> LLM</label>
+        <label><input type="checkbox" value="pipeline" checked> Pipeline</label>
+        <label><input type="checkbox" value="soulseek" checked> Soulseek</label>
+        <label><input type="checkbox" value="mcp" checked> MCP</label>
+        <label><input type="checkbox" value="system" checked> System</label>
+        <label><input type="checkbox" value="llm_server"> llama-server output</label>
+        <button class="small" id="logPause">Pause</button>
+      </div>
+    </div>
+    <div id="logView" class="logview"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab">
+    <h2>Settings</h2>
+    <form id="settingsForm" class="form grid two">
+      <fieldset class="card">
+        <legend>Jellyfin</legend>
+        <label>Server address <input name="jellyfin_url" placeholder="http://192.168.1.10:8096"></label>
+        <label>API key <input name="jellyfin_api_key" type="password" autocomplete="off"><small>Jellyfin Dashboard → API Keys → +.</small></label>
+        <label>Import folder as Jellyfin sees it <input name="jellyfin_import_path" placeholder="/media/music/Soulseek"><small>The same folder as “Import folder” below, but the path inside the Jellyfin container. Lets the hub add one file instead of rescanning the whole library. Leave blank to always rescan.</small></label>
+      </fieldset>
+      <fieldset class="card">
+        <legend>Soulseek (slskd)</legend>
+        <label>slskd address <input name="slskd_url"></label>
+        <label>slskd API key <input name="slskd_api_key" type="password" autocomplete="off"><small>The SLSKD_API_KEY you gave the slskd container.</small></label>
+        <label>slskd downloads folder <input name="slskd_downloads_dir"><small>Where slskd's downloads appear inside this container.</small></label>
+        <label>Import folder <input name="import_dir"><small>Finished songs are filed here as Artist/Album/NN - Title. Must be inside a Jellyfin music library.</small></label>
+      </fieldset>
+      <fieldset class="card">
+        <legend>Picking files</legend>
+        <label>Formats, in any order <input name="formats"><small>Comma-separated, e.g. flac, mp3, m4a.</small></label>
+        <label class="check"><input name="prefer_lossless" type="checkbox"> Prefer lossless (FLAC) over MP3</label>
+        <label>Lowest MP3/AAC bitrate (kbps) <input name="min_bitrate" type="number"></label>
+        <label>Largest file (MB) <input name="max_file_mb" type="number"></label>
+        <label>Search time (s) <input name="search_timeout_s" type="number"></label>
+        <label>Give up on a download after (s) <input name="download_timeout_s" type="number"></label>
+        <label>Files to try per song <input name="max_attempts" type="number" min="1" max="10"></label>
+        <label>Downloads at once <input name="parallel_downloads" type="number" min="1" max="6"><small>Takes effect after a restart.</small></label>
+      </fieldset>
+      <fieldset class="card">
+        <legend>Access</legend>
+        <label>Web UI password <input name="ui_password" type="password" autocomplete="new-password"><small>Set one if this page is reachable through the Cloudflare tunnel.</small></label>
+        <label>Hugging Face token <input name="hf_token" type="password" autocomplete="off"><small>Only needed for gated or private models.</small></label>
+        <div class="tokenbox">
+          <div class="k">Phone and MCP token</div>
+          <code id="tokenVal">••••••••</code>
+          <div class="row gap"><button type="button" class="small" id="tokenShow">Show</button><button type="button" class="small" id="tokenRotate">Make a new one</button></div>
+          <small>Phone app: Settings → Hub, address <code id="wsUrl"></code>, this token.<br>MCP clients: <code id="mcpUrl"></code> with header <code>Authorization: Bearer &lt;token&gt;</code>.</small>
+        </div>
+      </fieldset>
+      <div class="row gap span2"><button class="primary">Save settings</button><span id="saveInfo" class="muted"></span></div>
+    </form>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
